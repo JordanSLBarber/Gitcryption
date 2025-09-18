@@ -61,6 +61,7 @@ int generateExpandedKey(std::string key, uint16_t keyLength, std::string &expand
     /* Local variable declarations */
     uint8_t roundsNeeded;
     uint32_t rcon[MAX_ROUNDS_NEEDED]; // Round constant
+    uint8_t lengthOfKey; // Length of key in 32-bit words
 
     /* Validate key length to ensure it is 128, 192 or 256 */
     if (keyLength != 128 && keyLength != 192 && keyLength != 256) {
@@ -73,12 +74,15 @@ int generateExpandedKey(std::string key, uint16_t keyLength, std::string &expand
     {
     case 128:
         roundsNeeded = 11;
+        lengthOfKey = key.length() / 32; // 4 32-bit words in key
         break;
     case 192:
         roundsNeeded = 13;
+        lengthOfKey = key.length() / 32; // 6 32-bit words in key
         break;
     case 256:
         roundsNeeded = 15;
+        lengthOfKey = key.length() / 32; // 8 32-bit words in key
         break;
     default:
         break; // Should never reach here due to prior validation
@@ -107,31 +111,33 @@ int generateExpandedKey(std::string key, uint16_t keyLength, std::string &expand
     }
     
     /* Key expansion */
-    for (uint8_t expandedRound = 0; expandedRound < 4 * roundsNeeded; expandedRound++){
-        if (expandedRound < roundsNeeded){
+    /* @todo fix the rounds here, we need to do it for max num rounds, but we need to use the length of key 
+        correctly*/
+    for (uint8_t expandedRound = 0; expandedRound < 4 * lengthOfKey; expandedRound++){
+        if (expandedRound < lengthOfKey){
             /* First round keys are just the original key */
-            expandedKey.append(key, expandedRound * 4, 4);
+            expandedKey.append(key, expandedRound * 32, 32);
         } 
-        else if (expandedRound >= roundsNeeded && expandedRound % roundsNeeded == 0){
+        else if (expandedRound >= lengthOfKey && expandedRound % lengthOfKey == 0){
             /* Every Nth round we do: W(i-N) XOR SubWord(RotWord(W(i-1))) XOR rcon(i/N)*/
-            uint32_t tempWord = expandedKey[expandedRound - 1]; // W(i-1)
+            uint32_t tempWord = expandedKey[(expandedRound - 1)*32]; // W(i-1)
             tempWord = subWord(rotateWord(tempWord)); // SubWord(RotWord(W(i-1)))
-            tempWord = tempWord ^ expandedKey[expandedRound - roundsNeeded]; // XOR with W(i-N)
-            tempWord = tempWord ^ rcon[(expandedRound / roundsNeeded) - 1]; // XOR with rcon(i/N)
-            expandedKey.append(reinterpret_cast<const char*>(&tempWord), 4); // Append to the expanded key
+            tempWord = tempWord ^ expandedKey[(expandedRound - lengthOfKey)*32]; // XOR with W(i-N)
+            tempWord = tempWord ^ rcon[((expandedRound / lengthOfKey)- 1)*32]; // XOR with rcon(i/N)
+            expandedKey.append(reinterpret_cast<const char*>(&tempWord), 32); // Append to the expanded key
         }
-        else if (expandedRound >= roundsNeeded && expandedRound > 6 && expandedRound % roundsNeeded == 4){
+        else if (expandedRound >= lengthOfKey && expandedRound > 6 && expandedRound % lengthOfKey == 4){
             /* Every 4th round after the first N rounds we do: W(i-N) XOR SubWord(W(i-1)) */
-            uint32_t tempWord = expandedKey[expandedRound - 1]; // W(i-1)
+            uint32_t tempWord = expandedKey[(expandedRound - 1)*32]; // W(i-1)
             tempWord = subWord(tempWord); // SubWord(W(i-1))
-            tempWord = tempWord ^ expandedKey[expandedRound - roundsNeeded]; // XOR with W(i-N)
-            expandedKey.append(reinterpret_cast<const char*>(&tempWord), 4); // Append to the expanded key
+            tempWord = tempWord ^ expandedKey[(expandedRound - lengthOfKey)*32]; // XOR with W(i-N)
+            expandedKey.append(reinterpret_cast<const char*>(&tempWord), 32); // Append to the expanded key
         }
         else {
             /* All other rounds we do: W(i-N) XOR W(i-1) */
-            uint32_t tempWord = expandedKey[expandedRound - 1]; // W(i-1)
-            tempWord = tempWord ^ expandedKey[expandedRound - roundsNeeded]; // XOR with W(i-N)
-            expandedKey.append(reinterpret_cast<const char*>(&tempWord), 4); // Append to the expanded key
+            uint32_t tempWord = expandedKey[(expandedRound - 1)*32]; // W(i-1)
+            tempWord = tempWord ^ expandedKey[(expandedRound - lengthOfKey) * 32]; // XOR with W(i-N)
+            expandedKey.append(reinterpret_cast<const char*>(&tempWord), 32); // Append to the expanded key
         }
     }
     return 0;
@@ -139,8 +145,16 @@ int generateExpandedKey(std::string key, uint16_t keyLength, std::string &expand
 
 int main() {
     uint8_t outputByte;
+    int err;
     uint32_t rotatedWord;
     std::string roundKeys,expandedKey;
-    expandedKey = generateExpandedKey("example", 128, roundKeys);
+    /* Send the unicode for a key which equates to 00000000000000000000000000000000 */
+    /* Using https://legacy.cryptool.org/en/cto/aes-step-by-step to test the AES Algorithm*/
+    err = generateExpandedKey("ee50T/ZrS7NqkQnLEUCL7mYvifT2RlrJ4AS5oIIMHYGiY2nuaK3s7cDCWIl/AovD", 128, expandedKey);
+    std::cout << "Expanded Key: ";
+    for (char c : expandedKey) {
+        printf("%02X ", static_cast<uint8_t>(c));
+    }
+    std::cout << std::endl;
     return 0;
 }

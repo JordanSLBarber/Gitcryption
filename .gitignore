@@ -1,6 +1,6 @@
-./output
-./output/*
-./Test_Scripts/output
-./Test_Scripts/output/*
-./build
-./build/*
+output
+output/*
+Test_Scripts/output
+Test_Scripts/output/*
+build
+build/*
